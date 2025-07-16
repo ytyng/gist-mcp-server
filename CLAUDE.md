@@ -4,13 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## プロジェクト概要
 
-gist-mcp-server は、GitHub Gist の作成・管理用の MCP (Model Context Protocol) サーバーです。AI アシスタントが MCP プロトコル経由で GitHub Gist API と連携し、コードスニペットやファイルの共有、プライベート・パブリック Gist の作成、画像アップロードなどの包括的な Gist 管理機能を提供します。
+gist-mcp-server は、GitHub Gist の作成・管理用の MCP (Model Context Protocol) サーバーです。AI アシスタントが MCP プロトコル経由で GitHub Gist API と連携し、コードスニペットやファイルの共有、プライベート・パブリック Gist の作成などの包括的な Gist 管理機能を提供します。
 
 ### 主要機能
 - GitHub Gist の作成・更新・削除
 - プライベート・パブリック Gist の選択制御
 - 複数ファイル対応の Gist 作成
-- Base64 画像アップロード機能
 - Gist のスター機能（付ける・外す）
 - ユーザー Gist 一覧表示
 - 型安全な API 設計と堅牢なエラーハンドリング
@@ -106,9 +105,8 @@ gist-mcp-server/
 5. **`list_gists`**: Gist 一覧取得
 
 ### 拡張機能系
-6. **`upload_image_to_gist`**: 画像アップロード
-7. **`star_gist`**: Gist にスターを付ける
-8. **`unstar_gist`**: Gist のスターを外す
+6. **`star_gist`**: Gist にスターを付ける
+7. **`unstar_gist`**: Gist のスターを外す
 
 ## 環境設定
 
@@ -170,12 +168,8 @@ GITHUB_TOKEN=your_github_personal_access_token_here
 - **権限最小化**: gist 権限のみを要求
 - **トークン管理**: 環境変数からの安全な取得
 
-### 4. 画像アップロード機能
-- **Base64 エンコード**: 画像を Base64 として Markdown ファイルに埋め込み
-- **プライベート作成**: 画像 Gist は常にプライベートとして作成
-- **ファイル名自動設定**: 画像ファイル名に基づく自動命名
 
-### 5. ユーザビリティ
+### 4. ユーザビリティ
 - **日本語メッセージ**: エラー・成功メッセージの日本語対応
 - **詳細表示**: Gist 情報の分かりやすい整形表示
 - **ページネーション**: 大量 Gist の効率的な取得

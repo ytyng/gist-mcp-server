@@ -4,13 +4,12 @@ GitHub Gist の作成・管理用の MCP (Model Context Protocol) サーバー�
 
 ## 概要
 
-この MCP サーバーは、GitHub Gist API との連携を提供し、AI アシスタントから GitHub Gist の管理操作を可能にします。コードスニペットやファイルの共有、プライベート・パブリック Gist の作成、画像アップロード機能をサポートします。
+この MCP サーバーは、GitHub Gist API との連携を提供し、AI アシスタントから GitHub Gist の管理操作を可能にします。コードスニペットやファイルの共有、プライベート・パブリック Gist の作成をサポートします。
 
 ### 主な特徴
 
 - **Gist 作成・管理**: 単一・複数ファイルの Gist を作成・更新・削除
 - **プライバシー制御**: プライベート・パブリック Gist の選択可能
-- **画像アップロード**: Base64 エンコードされた画像を Gist にアップロード
 - **スター機能**: Gist のスター付け・削除機能
 - **一覧表示**: 自分や他のユーザーの Gist 一覧表示
 - **型安全性**: TypeScript + Zod による厳密な型チェック
@@ -89,12 +88,6 @@ deno run --allow-read --allow-net --allow-env main.ts
   - `per_page`: 1ページあたりの件数（1-100、デフォルト: 30）
   - `page`: 取得するページ番号（デフォルト: 1）
 
-### 🖼️ 画像アップロード
-
-- **`upload_image_to_gist`**: 画像を Base64 エンコードして Gist にアップロード
-  - `filename`: 画像ファイル名
-  - `base64_content`: Base64 エンコードされた画像データ
-  - `description`: Gist の説明（オプション）
 
 ### ⭐ スター機能
 
@@ -145,13 +138,6 @@ deno run --allow-read --allow-net --allow-env main.ts
    → ファイル内容や説明を変更
    ```
 
-6. **画像アップロード**
-   ```
-   upload_image_to_gist を実行
-   - filename: "screenshot.png"
-   - base64_content: "iVBORw0KGgoAAAANSUhEUgAA..."
-   - description: "アプリのスクリーンショット"
-   ```
 
 ## テスト
 

@@ -3,6 +3,21 @@ import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk/server/stdio
 import { z } from "zod";
 import { GistClient, formatGistInfo } from "./lib/gist.ts";
 
+// ログファイルのパス
+const LOG_FILE = "/tmp/gist-mcp-server.log";
+
+// ログ出力関数
+function writeLog(message: string) {
+  const timestamp = new Date().toISOString();
+  const logMessage = `[${timestamp}] ${message}\n`;
+  
+  try {
+    Deno.writeTextFileSync(LOG_FILE, logMessage, { append: true });
+  } catch (error) {
+    console.error("Failed to write log:", error);
+  }
+}
+
 // MCP サーバーの説明を読み込む
 async function loadInstructions(): Promise<string> {
   try {
@@ -43,14 +58,36 @@ server.tool(
   },
   async ({ description, files, public: isPublic }, _extra) => {
     try {
+      writeLog(`=== CREATE_GIST START ===`);
+      writeLog(`Description: ${description}`);
+      writeLog(`Public: ${isPublic}`);
+      writeLog(`Files count: ${Object.keys(files).length}`);
+      
+      // 各ファイルの詳細をログ出力
+      for (const [filename, fileData] of Object.entries(files)) {
+        writeLog(`File: ${filename}`);
+        writeLog(`Content length: ${fileData.content.length}`);
+        writeLog(`Content (first 100 chars): ${fileData.content.substring(0, 100)}`);
+        writeLog(`Content (escaped): ${JSON.stringify(fileData.content)}`);
+        writeLog(`Content (raw bytes): ${Array.from(fileData.content).map(c => c.charCodeAt(0)).join(',')}`);
+        writeLog(`--- End of ${filename} ---`);
+      }
+      
       const client = new GistClient(getGitHubToken());
+      
+      writeLog(`Calling GitHub API...`);
       const gist = await client.createGist({
         description,
         files,
         public: isPublic
       });
+      
+      writeLog(`GitHub API response: ${gist.id}`);
+      writeLog(`Gist URL: ${gist.html_url}`);
 
       const info = formatGistInfo(gist);
+      writeLog(`=== CREATE_GIST SUCCESS ===`);
+      
       return {
         content: [
           {
@@ -60,6 +97,8 @@ server.tool(
         ]
       };
     } catch (error) {
+      writeLog(`=== CREATE_GIST ERROR ===`);
+      writeLog(`Error: ${error}`);
       console.error("Tool error in create_gist:", error);
       return {
         content: [
@@ -249,41 +288,6 @@ server.tool(
   },
 );
 
-// 画像アップロード
-server.tool(
-  "upload_image_to_gist",
-  "画像を Base64 エンコードして Gist にアップロードします。プライベート Gist として作成されます。",
-  {
-    filename: z.string().min(1).describe("画像ファイル名"),
-    base64_content: z.string().min(1).describe("Base64 エンコードされた画像データ"),
-    description: z.string().optional().describe("Gist の説明")
-  },
-  async ({ filename, base64_content, description }, _extra) => {
-    try {
-      const client = new GistClient(getGitHubToken());
-      const url = await client.uploadImage(filename, base64_content);
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `✅ 画像が正常にアップロードされました！\n\nファイル名: ${filename}\n説明: ${description || 'Image upload'}\nURL: ${url}`
-          }
-        ]
-      };
-    } catch (error) {
-      console.error("Tool error in upload_image_to_gist:", error);
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `❌ 画像のアップロード中にエラーが発生しました: ${error instanceof Error ? error.message : String(error)}`
-          }
-        ]
-      };
-    }
-  },
-);
 
 // Gist にスターを付ける
 server.tool(
@@ -355,10 +359,18 @@ server.tool(
 
 async function main(): Promise<void> {
   try {
+    // ログファイルを初期化
+    writeLog("=== GIST MCP SERVER STARTING ===");
+    writeLog(`Version: 1.0.0`);
+    writeLog(`Log file: ${LOG_FILE}`);
+    
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error("Starting gist-mcp-server v1.0.0");
+    writeLog("=== GIST MCP SERVER STARTED ===");
   } catch (error) {
+    writeLog(`=== STARTUP ERROR ===`);
+    writeLog(`Error: ${error}`);
     console.error("Failed to start gist-mcp-server:", error);
     Deno.exit(1);
   }

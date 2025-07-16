@@ -211,22 +211,6 @@ export class GistClient {
     });
   }
 
-  // 画像をアップロード（Base64エンコード）
-  async uploadImage(filename: string, base64Content: string): Promise<string> {
-    // GitHub Gist は画像の直接アップロードをサポートしていないため、
-    // Base64 エンコードされた画像を Markdown ファイルに埋め込む形で保存
-    const markdownContent = `![${filename}](data:image/png;base64,${base64Content})`;
-    
-    const gist = await this.createGist({
-      description: `Image: ${filename}`,
-      public: false,
-      files: {
-        [`${filename}.md`]: { content: markdownContent }
-      }
-    });
-
-    return gist.html_url;
-  }
 
   // 複数ファイルを含む Gist を作成
   async createMultiFileGist(

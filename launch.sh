@@ -19,6 +19,6 @@ fi
 /opt/homebrew/bin/deno run \
   --allow-read=./ \
   --allow-net \
-  --allow-write=$HOME/Downloads \
+  --allow-write=$HOME/Downloads,/tmp \
   --allow-env \
   main.ts
