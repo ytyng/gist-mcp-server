@@ -1,117 +1,118 @@
 # gist-mcp-server
 
-GitHub Gist の作成・管理用の MCP (Model Context Protocol) サーバーです。
+An MCP (Model Context Protocol) server for creating and managing GitHub Gists.
 
-## 概要
+![](./documents/images/featured-image.png)
 
-この MCP サーバーは、GitHub Gist API との連携を提供し、AI アシスタントから GitHub Gist の管理操作を可能にします。コードスニペットやファイルの共有、プライベート・パブリック Gist の作成をサポートします。
+## Overview
 
-### 主な特徴
+This MCP server provides integration with the GitHub Gist API, enabling AI assistants to manage GitHub Gists. It supports sharing code snippets and files, and creating both private and public Gists.
 
-- **Gist 作成・管理**: 単一・複数ファイルの Gist を作成・更新・削除
-- **プライバシー制御**: プライベート・パブリック Gist の選択可能
-- **スター機能**: Gist のスター付け・削除機能
-- **一覧表示**: 自分や他のユーザーの Gist 一覧表示
-- **型安全性**: TypeScript + Zod による厳密な型チェック
-- **エラーハンドリング**: 堅牢なエラー処理とユーザーフレンドリーなメッセージ
+### Key Features
 
-## セットアップ
+- **Gist CRUD**: Create, read, update, and delete single or multi-file Gists
+- **Privacy Control**: Choose between private and public Gists
+- **Star Management**: Star and unstar Gists
+- **Listing**: View your own or other users' Gists
+- **Type Safety**: Strict type checking with TypeScript + Zod
+- **Error Handling**: Robust error handling with user-friendly messages
 
-### 必要な環境
+## Setup
 
-- **Deno**: v1.40 以降
-- **GitHub Personal Access Token**: Gist 権限を持つトークン
+### Prerequisites
 
-### 1. リポジトリのクローン
+- **Deno**: v1.40 or later
+- **GitHub Personal Access Token**: A token with Gist permissions
+
+### 1. Clone the Repository
 
 ```bash
 git clone <repository-url>
 cd gist-mcp-server
 ```
 
-### 2. 環境変数の設定
+### 2. Configure Environment Variables
 
-`.env.example` をコピーして `.env` ファイルを作成し、GitHub トークンを設定します：
+Copy `.env.example` to create a `.env` file and set your GitHub token:
 
 ```bash
 cp .env.example .env
 ```
 
-`.env` ファイルを編集：
+Edit the `.env` file:
 
 ```bash
 # GitHub Personal Access Token
-# 必要な権限: gist (Gist の作成・読み書き・削除)
+# Required permission: gist (create, read, write, delete Gists)
 GITHUB_TOKEN=your_github_token_here
 ```
 
-### 3. GitHub Personal Access Token の取得
+### 3. Obtain a GitHub Personal Access Token
 
-1. GitHub の Settings > Developer settings > Personal access tokens > Tokens (classic) に移動
-2. "Generate new token (classic)" をクリック
-3. 必要な権限を選択：
-   - `gist` - Gist の作成・読み書き・削除
-4. トークンを生成し、`.env` ファイルに設定
+1. Go to GitHub Settings > Developer settings > Personal access tokens > Tokens (classic)
+2. Click "Generate new token (classic)"
+3. Select the required permission:
+   - `gist` - Create, read, write, and delete Gists
+4. Generate the token and add it to your `.env` file
 
-### 4. 動作確認
+### 4. Verify Installation
 
 ```bash
-# MCP サーバーを起動
+# Start the MCP server
 ./launch.sh
 
-# または直接実行
+# Or run directly
 deno run --allow-read --allow-net --allow-env main.ts
 ```
 
-## 利用可能なツール
+## Available Tools
 
-### 📝 Gist 管理
+### Gist Management
 
-- **`create_gist`**: GitHub Gist を作成
-  - `description`: Gist の説明（オプション）
-  - `files`: ファイル名をキーとした、ファイル内容のオブジェクト
-  - `public`: パブリック Gist かどうか（デフォルト: false）
+- **`create_gist`**: Create a GitHub Gist
+  - `description`: Description of the Gist (optional)
+  - `files`: An object with filenames as keys and file contents as values
+  - `public`: Whether the Gist is public (default: false)
 
-- **`get_gist`**: 指定された ID の Gist を取得
-  - `gist_id`: 取得したい Gist の ID
+- **`get_gist`**: Retrieve a Gist by ID
+  - `gist_id`: The ID of the Gist to retrieve
 
-- **`update_gist`**: 既存の Gist を更新
-  - `gist_id`: 更新したい Gist の ID
-  - `description`: 新しい説明（オプション）
-  - `files`: 更新するファイル（オプション）
+- **`update_gist`**: Update an existing Gist
+  - `gist_id`: The ID of the Gist to update
+  - `description`: New description (optional)
+  - `files`: Files to update (optional)
 
-- **`delete_gist`**: 指定された ID の Gist を削除
-  - `gist_id`: 削除したい Gist の ID
+- **`delete_gist`**: Delete a Gist by ID
+  - `gist_id`: The ID of the Gist to delete
 
-- **`list_gists`**: ユーザーの Gist 一覧を取得
-  - `username`: 取得したいユーザー名（省略時は認証されたユーザー）
-  - `per_page`: 1ページあたりの件数（1-100、デフォルト: 30）
-  - `page`: 取得するページ番号（デフォルト: 1）
+- **`list_gists`**: List a user's Gists
+  - `username`: Username to query (defaults to the authenticated user)
+  - `per_page`: Items per page (1-100, default: 30)
+  - `page`: Page number (default: 1)
 
+### Star Management
 
-### ⭐ スター機能
+- **`star_gist`**: Star a Gist
+  - `gist_id`: The ID of the Gist to star
 
-- **`star_gist`**: 指定された Gist にスターを付ける
-  - `gist_id`: スターを付けたい Gist の ID
+- **`unstar_gist`**: Unstar a Gist
+  - `gist_id`: The ID of the Gist to unstar
 
-- **`unstar_gist`**: 指定された Gist のスターを外す
-  - `gist_id`: スターを外したい Gist の ID
+## Usage Examples
 
-## 使用例
+### Basic Workflow
 
-### 基本的な使用フロー
-
-1. **単一ファイル Gist 作成**
+1. **Create a single-file Gist**
    ```
-   create_gist を実行
+   Run create_gist
    - description: "Python Hello World"
    - files: {"hello.py": {"content": "print('Hello, World!')"}}
    - public: false
    ```
 
-2. **複数ファイル Gist 作成**
+2. **Create a multi-file Gist**
    ```
-   create_gist を実行
+   Run create_gist
    - description: "React Component Example"
    - files: {
        "Component.jsx": {"content": "import React from 'react'..."},
@@ -120,147 +121,146 @@ deno run --allow-read --allow-net --allow-env main.ts
    - public: true
    ```
 
-3. **Gist 一覧確認**
+3. **List Gists**
    ```
-   list_gists を実行
-   → 作成済み Gist の一覧を確認
-   ```
-
-4. **Gist 詳細確認**
-   ```
-   get_gist に gist_id を指定
-   → Gist の詳細情報を確認
+   Run list_gists
+   → View a list of created Gists
    ```
 
-5. **Gist 更新**
+4. **View Gist Details**
    ```
-   update_gist に gist_id と更新内容を指定
-   → ファイル内容や説明を変更
+   Run get_gist with a gist_id
+   → View detailed Gist information
    ```
 
+5. **Update a Gist**
+   ```
+   Run update_gist with a gist_id and updated content
+   → Modify file contents or description
+   ```
 
-## テスト
+## Testing
 
-### 動作確認テスト
+### Manual Testing
 
-test-request ディレクトリ内のスクリプトを使用して動作確認ができます：
+Use the scripts in the `test-request` directory to verify functionality:
 
 ```bash
 cd test-request
 
-# ツール一覧の確認
+# List available tools
 ./test-tools-list.sh
 
-# Gist 作成テスト
+# Test Gist creation
 ./test-create-gist.sh
 
-# Gist 一覧取得テスト
+# Test Gist listing
 ./test-list-gists.sh
 
-# Gist 詳細取得テスト（gist_id が必要）
+# Test Gist retrieval (requires gist_id)
 ./test-get-gist.sh <gist_id>
 
-# Gist 更新テスト（gist_id が必要）
+# Test Gist update (requires gist_id)
 ./test-update-gist.sh <gist_id>
 
-# Gist 削除テスト（gist_id が必要）
+# Test Gist deletion (requires gist_id)
 ./test-delete-gist.sh <gist_id>
 ```
 
-## 開発
+## Development
 
-### プロジェクト構造
+### Project Structure
 
 ```
 gist-mcp-server/
-├── main.ts                         # MCP サーバーのエントリーポイント
+├── main.ts                         # MCP server entry point
 ├── lib/
-│   ├── gist.ts                     # GitHub Gist API 関連の機能実装
-│   └── mcp-server-instructions.md  # MCP サーバーの説明文
-├── test-request/                   # 動作確認用スクリプト
-├── deno.json                       # Deno 設定ファイル
-├── .env.example                    # 環境変数のサンプル
-├── launch.sh                       # 実行スクリプト
-├── CLAUDE.md                       # Claude Code 用のガイド
-└── README.md                       # このファイル
+│   ├── gist.ts                     # GitHub Gist API implementation
+│   └── mcp-server-instructions.md  # MCP server description
+├── test-request/                   # Manual testing scripts
+├── deno.json                       # Deno configuration
+├── .env.example                    # Environment variable template
+├── launch.sh                       # Launch script
+├── CLAUDE.md                       # Claude Code guide
+└── README.md                       # This file
 ```
 
-### 技術スタック
+### Tech Stack
 
-- **言語**: TypeScript
-- **ランタイム**: Deno
-- **MCP フレームワーク**: `@modelcontextprotocol/sdk`
-- **スキーマ検証**: Zod
-- **API クライアント**: Fetch API
+- **Language**: TypeScript
+- **Runtime**: Deno
+- **MCP Framework**: `@modelcontextprotocol/sdk`
+- **Schema Validation**: Zod
+- **API Client**: Fetch API
 
-### 設計原則
+### Design Principles
 
-1. **型安全性**: TypeScript + Zod による厳密な型チェック
-2. **エラーハンドリング**: すべての API 呼び出しとユーザー入力に対する適切なエラー処理
-3. **入力検証**: MCP ツール層での入力値検証
-4. **レスポンス構造**: 統一されたエラー・成功レスポンス形式
-5. **セキュリティ**: デフォルトでプライベート Gist として作成
+1. **Type Safety**: Strict type checking with TypeScript + Zod
+2. **Error Handling**: Proper error handling for all API calls and user inputs
+3. **Input Validation**: Validation at the MCP tool layer
+4. **Response Structure**: Unified error and success response format
+5. **Security**: Gists are created as private by default
 
-### GitHub Gist API エンドポイント
+### GitHub Gist API Endpoints
 
-使用する主要な API エンドポイント：
+Primary API endpoints used:
 
-| エンドポイント | メソッド | 説明 |
-|----------------|----------|------|
-| `/gists` | GET | Gist 一覧取得 |
-| `/gists` | POST | Gist 作成 |
-| `/gists/{id}` | GET | Gist 詳細取得 |
-| `/gists/{id}` | PATCH | Gist 更新 |
-| `/gists/{id}` | DELETE | Gist 削除 |
-| `/gists/{id}/star` | PUT/DELETE | スター付け/削除 |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/gists` | GET | List Gists |
+| `/gists` | POST | Create a Gist |
+| `/gists/{id}` | GET | Get Gist details |
+| `/gists/{id}` | PATCH | Update a Gist |
+| `/gists/{id}` | DELETE | Delete a Gist |
+| `/gists/{id}/star` | PUT/DELETE | Star/Unstar a Gist |
 
-## トラブルシューティング
+## Troubleshooting
 
-### よくある問題と解決方法
+### Common Issues
 
-1. **認証エラー (401 Unauthorized)**
-   - `.env` ファイルの `GITHUB_TOKEN` が正しく設定されているか確認
-   - トークンに `gist` 権限が付与されているか確認
-   - トークンの有効期限を確認
+1. **Authentication Error (401 Unauthorized)**
+   - Verify that `GITHUB_TOKEN` is correctly set in your `.env` file
+   - Confirm the token has the `gist` permission
+   - Check if the token has expired
 
-2. **ネットワークエラー**
-   - インターネット接続を確認
-   - ファイアウォール設定を確認
-   - GitHub API の稼働状況を確認
+2. **Network Error**
+   - Check your internet connection
+   - Review firewall settings
+   - Check GitHub API status
 
-3. **リソースが見つからない (404 Not Found)**
-   - 指定した gist_id が正しいか確認
-   - 削除済みの Gist ではないか確認
-   - プライベート Gist の場合、所有者であることを確認
+3. **Resource Not Found (404 Not Found)**
+   - Verify the gist_id is correct
+   - Ensure the Gist has not been deleted
+   - For private Gists, confirm you are the owner
 
-4. **デバッグモード**
+4. **Debug Mode**
    ```bash
-   # デバッグ情報を有効にして実行
+   # Run with debug logging enabled
    DENO_LOG=debug deno run --allow-read --allow-net --allow-env main.ts
    ```
 
-### ログ例
+### Log Examples
 
 ```
 Warning: Failed to load instructions file: ...
 Starting gist-mcp-server v1.0.0
 ```
 
-## セキュリティ考慮事項
+## Security Considerations
 
-- **API トークン管理**: `.env` ファイルはリポジトリにコミットしない
-- **デフォルトプライベート**: 全ての Gist はデフォルトでプライベートとして作成
-- **権限管理**: 必要最小限の権限（gist のみ）を持つトークンを使用
-- **機密情報**: 機密情報を含むファイルは Gist に保存しない
+- **API Token Management**: Do not commit the `.env` file to the repository
+- **Private by Default**: All Gists are created as private by default
+- **Least Privilege**: Use a token with only the minimum required permission (`gist`)
+- **Sensitive Data**: Do not store sensitive information in Gists
 
-## ライセンス
+## License
 
-プライベートプロジェクト
+Private project
 
-## 貢献
+## Contributing
 
-このプロジェクトは個人用途のため、外部からの貢献は受け付けていません。
+This project is for personal use; external contributions are not accepted.
 
-## サポート
+## Support
 
-技術的な問題や質問については、プロジェクトの Issue トラッカーを使用してください。
+For technical issues or questions, please use the project's issue tracker.
