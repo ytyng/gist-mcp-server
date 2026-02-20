@@ -54,8 +54,8 @@ USAGE:
 
 OPTIONS:
   --file=<filename>       Filename for the Gist (required, can be specified multiple times)
-  --content=<content>     Content for the file (paired with preceding --file)
-  --stdin                 Read content from stdin (for the preceding --file)
+  --content=<content>     Content for the file (matched by position with --file; 1st with 1st, 2nd with 2nd, etc.)
+  --stdin                 Read content from stdin (requires exactly one --file option)
   --description=<desc>    Description for the Gist
   --public                Make the Gist public (default: private)
 
@@ -183,6 +183,7 @@ async function readStdin(): Promise<string> {
   for await (const chunk of Deno.stdin.readable) {
     chunks.push(decoder.decode(chunk, { stream: true }));
   }
+  chunks.push(decoder.decode());
   return chunks.join("");
 }
 
@@ -301,7 +302,7 @@ async function cmdUpdate(args: string[]) {
   // Renames: --rename=old:new
   if (renames) {
     for (const r of renames) {
-      const [oldName, newName] = r.split(":");
+      const [oldName, newName] = r.split(":", 2);
       if (!oldName || !newName) {
         console.error(`Error: Invalid rename format '${r}'. Use --rename=old:new`);
         Deno.exit(1);
@@ -361,10 +362,21 @@ async function cmdList(args: string[]) {
   const perPage = getFlag(flags, "per-page");
   const page = getFlag(flags, "page");
 
+  const perPageNum = perPage ? parseInt(perPage, 10) : 30;
+  const pageNum = page ? parseInt(page, 10) : 1;
+  if (isNaN(perPageNum) || perPageNum < 1 || perPageNum > 100) {
+    console.error("Error: --per-page must be an integer between 1 and 100.");
+    Deno.exit(1);
+  }
+  if (isNaN(pageNum) || pageNum < 1) {
+    console.error("Error: --page must be a positive integer.");
+    Deno.exit(1);
+  }
+
   const client = new GistClient(getGitHubToken());
   const gists = await client.listGists(username, {
-    per_page: perPage ? parseInt(perPage, 10) : 30,
-    page: page ? parseInt(page, 10) : 1,
+    per_page: perPageNum,
+    page: pageNum,
   });
 
   if (gists.length === 0) {
