@@ -1,10 +1,13 @@
 #!/usr/bin/env zsh
-# memento-mcp-server 実行スクリプト
+# gist-mcp-server 実行スクリプト
 
 # エラーが発生したら即座に終了
 set -e
 
 cd "$(dirname "$0")" || exit 1
+
+# .loadenv.sh が存在する場合、環境変数を読み込む
+[ -f .loadenv.sh ] && source .loadenv.sh
 
 # .envファイルが存在する場合、環境変数を読み込む
 # つまり、launch.sh 経由で起動して、.env があるなら、環境変数の指定は不要

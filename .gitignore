@@ -5,6 +5,7 @@ temp
 .#*
 ~*
 .env
+.loadenv.sh
 
 # Editor
 *~
