@@ -1,6 +1,29 @@
 #!/usr/bin/env -S deno run --allow-read --allow-net --allow-env
 
-import { GistClient, formatGistInfo } from "./lib/gist.ts";
+import {
+  type Gist,
+  GistClient,
+  type GistVisibility,
+  filterByVisibility,
+  filterOlderThanDays,
+  formatGistInfo,
+} from "./lib/gist.ts";
+
+function parseVisibility(value: string | undefined, defaultValue: GistVisibility): GistVisibility {
+  if (value === undefined) return defaultValue;
+  if (value === "secret" || value === "public" || value === "all") return value;
+  console.error(`Error: --visibility must be one of: secret, public, all (got '${value}')`);
+  Deno.exit(1);
+}
+
+async function promptYesNo(message: string): Promise<boolean> {
+  await Deno.stdout.write(new TextEncoder().encode(`${message} [y/N]: `));
+  const buf = new Uint8Array(1024);
+  const n = await Deno.stdin.read(buf);
+  if (n === null) return false;
+  const answer = new TextDecoder().decode(buf.subarray(0, n)).trim().toLowerCase();
+  return answer === "y" || answer === "yes";
+}
 
 function getGitHubToken(): string {
   const token = Deno.env.get("GITHUB_TOKEN");
@@ -23,6 +46,7 @@ SUBCOMMANDS:
   update        Update an existing Gist
   delete        Delete a Gist (irreversible)
   list          List Gists for the authenticated user or a specified user
+  prune         Delete Gists older than N days (filterable by visibility)
   star          Star a Gist
   unstar        Unstar a Gist
 
@@ -31,10 +55,14 @@ EXAMPLES:
   gist-cli create --file=script.sh --stdin --description="My script" --public
   gist-cli get <gist_id>
   gist-cli list --per-page=10 --page=1
-  gist-cli list --username=octocat
+  gist-cli list --username=octocat --visibility=public
   gist-cli update <gist_id> --description="Updated description"
   gist-cli update <gist_id> --file=hello.py --content="print('updated')"
   gist-cli delete <gist_id>
+  gist-cli prune --days=30 --visibility=secret              # confirm before deleting
+  gist-cli prune --days=30 --visibility=secret --dry-run    # list candidates only
+  gist-cli prune --days=30 --visibility=secret --yes        # delete without prompt
+  gist-cli prune --days=90 --visibility=all --yes
   gist-cli star <gist_id>
   gist-cli unstar <gist_id>
 
@@ -103,12 +131,40 @@ USAGE:
   gist-cli list [options]
 
 OPTIONS:
-  --username=<user>   List Gists of a specific user (default: authenticated user)
-  --per-page=<n>      Number of Gists per page, 1-100 (default: 30)
-  --page=<n>          Page number (default: 1)
+  --username=<user>          List Gists of a specific user (default: authenticated user)
+  --per-page=<n>             Number of Gists per page, 1-100 (default: 30)
+                             Ignored when --visibility is specified (other than 'all').
+  --page=<n>                 Page number (default: 1)
+                             Ignored when --visibility is specified (other than 'all').
+  --visibility=<v>           Filter by visibility: secret, public, all (default: all)
+                             Note: GitHub API has no visibility filter, so when
+                             this is set to secret/public, all pages are fetched
+                             and filtered client-side.
+                             Note: 'secret' is meaningful only for the authenticated
+                             user. /users/<username>/gists returns public Gists only,
+                             so --username + --visibility=secret yields zero results.
 
 OUTPUT:
   Displays a summary list of Gists with ID, description, files, and URL.`);
+}
+
+function showPruneHelp() {
+  console.log(`gist-cli prune - Delete Gists at least N days old
+
+USAGE:
+  gist-cli prune --days=<n> --visibility=<v> [options]
+
+OPTIONS:
+  --days=<n>          Required. Delete Gists whose created_at is at least N days ago (inclusive).
+  --visibility=<v>    Required. Filter by visibility: secret, public, all
+  --dry-run           List candidates only, do not delete or prompt
+  --yes               Skip confirmation prompt and delete immediately
+
+BEHAVIOR:
+  Without --yes or --dry-run, lists candidates and prompts for confirmation.
+
+WARNING:
+  Deletion is irreversible. Use --dry-run first to verify the candidate list.`);
 }
 
 function showDeleteHelp() {
@@ -361,23 +417,41 @@ async function cmdList(args: string[]) {
   const username = getFlag(flags, "username");
   const perPage = getFlag(flags, "per-page");
   const page = getFlag(flags, "page");
+  const visibility = parseVisibility(getFlag(flags, "visibility"), "all");
 
-  const perPageNum = perPage ? parseInt(perPage, 10) : 30;
-  const pageNum = page ? parseInt(page, 10) : 1;
-  if (isNaN(perPageNum) || perPageNum < 1 || perPageNum > 100) {
-    console.error("Error: --per-page must be an integer between 1 and 100.");
-    Deno.exit(1);
-  }
-  if (isNaN(pageNum) || pageNum < 1) {
-    console.error("Error: --page must be a positive integer.");
-    Deno.exit(1);
-  }
-
+  // GitHub Gist API は visibility フィルターを持たないので、--visibility 指定時は
+  // 全ページ取得→クライアント側で絞り込む。--page/--per-page は無視される。
   const client = new GistClient(getGitHubToken());
-  const gists = await client.listGists(username, {
-    per_page: perPageNum,
-    page: pageNum,
-  });
+  let gists: Gist[];
+  if (visibility !== "all") {
+    if (perPage !== undefined || page !== undefined) {
+      console.error(
+        `Note: --visibility=${visibility} requires fetching all pages; --page/--per-page are ignored.`
+      );
+    }
+    if (username && visibility === "secret") {
+      console.error(
+        `Note: GitHub API only returns public Gists for /users/${username}/gists, so --visibility=secret will yield zero results.`
+      );
+    }
+    const all = await client.listAllGists(username);
+    gists = filterByVisibility(all, visibility);
+  } else {
+    const perPageNum = perPage ? parseInt(perPage, 10) : 30;
+    const pageNum = page ? parseInt(page, 10) : 1;
+    if (isNaN(perPageNum) || perPageNum < 1 || perPageNum > 100) {
+      console.error("Error: --per-page must be an integer between 1 and 100.");
+      Deno.exit(1);
+    }
+    if (isNaN(pageNum) || pageNum < 1) {
+      console.error("Error: --page must be a positive integer.");
+      Deno.exit(1);
+    }
+    gists = await client.listGists(username, {
+      per_page: perPageNum,
+      page: pageNum,
+    });
+  }
 
   if (gists.length === 0) {
     console.log("No Gists found.");
@@ -386,9 +460,9 @@ async function cmdList(args: string[]) {
 
   for (const [i, gist] of gists.entries()) {
     const files = Object.keys(gist.files).join(", ");
-    const visibility = gist.public ? "Public" : "Private";
+    const v = gist.public ? "Public" : "Secret";
     console.log(
-      `${i + 1}. ${gist.description || "No description"} (${visibility})\n` +
+      `${i + 1}. ${gist.description || "No description"} (${v})\n` +
       `   ID: ${gist.id}\n` +
       `   Files: ${files}\n` +
       `   Updated: ${new Date(gist.updated_at).toLocaleString("ja-JP")}\n` +
@@ -396,6 +470,94 @@ async function cmdList(args: string[]) {
     );
     if (i < gists.length - 1) console.log();
   }
+}
+
+async function cmdPrune(args: string[]) {
+  const { flags } = parseArgs(args);
+
+  if (hasFlag(flags, "help")) {
+    showPruneHelp();
+    return;
+  }
+
+  const daysStr = getFlag(flags, "days");
+  if (!daysStr) {
+    console.error("Error: --days=<n> is required. Use --help for usage.");
+    Deno.exit(1);
+  }
+  const days = parseInt(daysStr, 10);
+  if (isNaN(days) || days < 0) {
+    console.error("Error: --days must be a non-negative integer.");
+    Deno.exit(1);
+  }
+
+  const visibilityRaw = getFlag(flags, "visibility");
+  if (!visibilityRaw) {
+    console.error("Error: --visibility=<secret|public|all> is required. Use --help for usage.");
+    Deno.exit(1);
+  }
+  const visibility = parseVisibility(visibilityRaw, "secret");
+  const dryRun = hasFlag(flags, "dry-run");
+  const skipConfirm = hasFlag(flags, "yes");
+
+  const client = new GistClient(getGitHubToken());
+
+  console.error(`Fetching all Gists for the authenticated user...`);
+  const allGists = await client.listAllGists();
+  const byVisibility = filterByVisibility(allGists, visibility);
+  const candidates = filterOlderThanDays(byVisibility, days);
+
+  console.error(
+    `Found ${allGists.length} total Gists, ${byVisibility.length} matching visibility=${visibility}, ${candidates.length} at least ${days} days old.`
+  );
+
+  if (candidates.length === 0) {
+    console.log("No Gists match the prune criteria. Nothing to do.");
+    return;
+  }
+
+  console.log(`\nDeletion candidates (visibility=${visibility}, at least ${days} days old, by created_at):\n`);
+  for (const [i, gist] of candidates.entries()) {
+    const files = Object.keys(gist.files).join(", ");
+    const v = gist.public ? "Public" : "Secret";
+    console.log(
+      `${i + 1}. ${gist.description || "No description"} (${v})\n` +
+      `   ID: ${gist.id}\n` +
+      `   Files: ${files}\n` +
+      `   Created: ${new Date(gist.created_at).toLocaleString("ja-JP")}\n` +
+      `   URL: ${gist.html_url}`
+    );
+  }
+
+  if (dryRun) {
+    console.log(`\n[dry-run] Would delete ${candidates.length} Gist(s). No changes made.`);
+    return;
+  }
+
+  if (!skipConfirm) {
+    const ok = await promptYesNo(`\nDelete ${candidates.length} Gist(s)?`);
+    if (!ok) {
+      console.log("Aborted. No Gists deleted.");
+      return;
+    }
+  }
+
+  let deleted = 0;
+  let failed = 0;
+  for (const gist of candidates) {
+    try {
+      await client.deleteGist(gist.id);
+      console.log(`Deleted: ${gist.id} (${gist.description || "No description"})`);
+      deleted++;
+    } catch (error) {
+      console.error(
+        `Failed to delete ${gist.id}: ${error instanceof Error ? error.message : String(error)}`
+      );
+      failed++;
+    }
+  }
+
+  console.log(`\nDone. Deleted ${deleted} Gist(s), ${failed} failed.`);
 }
 
 async function cmdStar(args: string[]) {
@@ -450,6 +612,7 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   update: cmdUpdate,
   delete: cmdDelete,
   list: cmdList,
+  prune: cmdPrune,
   star: cmdStar,
   unstar: cmdUnstar,
 };
