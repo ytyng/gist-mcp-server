@@ -167,7 +167,9 @@ export class GistClient {
     since?: string;
     per_page?: number;
   }): Promise<Gist[]> {
-    const perPage = options?.per_page ?? 100;
+    // GitHub API の per_page 仕様 (1-100) を超えた値は無限ループや想定外の挙動を招くのでクランプ
+    const requested = options?.per_page ?? 100;
+    const perPage = Math.min(100, Math.max(1, Math.floor(requested)));
     const all: Gist[] = [];
     for (let page = 1; ; page++) {
       const batch = await this.listGists(username, {
@@ -176,7 +178,8 @@ export class GistClient {
         since: options?.since,
       });
       all.push(...batch);
-      if (batch.length < perPage) break;
+      // 空応答は最終ページ。batch.length === perPage の場合のみ次ページを試す
+      if (batch.length === 0 || batch.length < perPage) break;
     }
     return all;
   }

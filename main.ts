@@ -365,13 +365,14 @@ server.tool(
 // 古い Gist を一括削除
 server.tool(
   "prune_old_gists",
-  "指定した日数より古い Gist を一括削除します。可視性 (secret / public / all) で対象を絞り込め、デフォルトは secret のみです。dry_run を true にすると候補一覧のみ返します。",
+  "指定した日数以上前に作成された Gist を一括削除します。可視性 (secret / public / all) で対象を絞り込め、デフォルトは secret のみです。dry_run を true にすると候補一覧のみ返します。実削除には dry_run=false に加えて confirm=true の明示が必須 (二重ゲート)。",
   {
     days: z.number().int().min(1).describe("created_at がこの日数以上前の Gist を対象にする (例: 30)。AI 誤爆防止のため最小値は 1。"),
     visibility: z.enum(["secret", "public", "all"]).optional().default("secret").describe("対象の可視性 (デフォルト: secret)"),
-    dry_run: z.boolean().optional().default(true).describe("true の場合は削除せず候補一覧のみ返す (デフォルト: true)")
+    dry_run: z.boolean().optional().default(true).describe("true の場合は削除せず候補一覧のみ返す (デフォルト: true)"),
+    confirm: z.boolean().optional().default(false).describe("dry_run=false で実削除する場合、明示的に true を指定する必要がある (二重ゲート、AI 誤爆防止)。")
   },
-  async ({ days, visibility, dry_run }, _extra) => {
+  async ({ days, visibility, dry_run, confirm }, _extra) => {
     try {
       const client = new GistClient(getGitHubToken());
       const all = await client.listAllGists();
@@ -399,7 +400,18 @@ server.tool(
           content: [
             {
               type: "text" as const,
-              text: `🔍 [dry-run] ${candidates.length} 件が削除対象です (visibility=${visibility}, ${days}日以上前):\n\n${list}\n\n実行するには dry_run=false を指定してください。`
+              text: `🔍 [dry-run] ${candidates.length} 件が削除対象です (visibility=${visibility}, ${days}日以上前):\n\n${list}\n\n実行するには dry_run=false かつ confirm=true を指定してください。`
+            }
+          ]
+        };
+      }
+
+      if (!confirm) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `⛔ 実削除には confirm=true の明示が必要です。${candidates.length} 件が削除対象 (visibility=${visibility}, ${days}日以上前):\n\n${list}\n\n削除する場合は dry_run=false かつ confirm=true で再呼び出ししてください。`
             }
           ]
         };

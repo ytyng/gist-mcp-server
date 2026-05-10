@@ -1,6 +1,7 @@
 #!/usr/bin/env -S deno run --allow-read --allow-net --allow-env
 
 import {
+  type Gist,
   GistClient,
   type GistVisibility,
   filterByVisibility,
@@ -54,7 +55,7 @@ EXAMPLES:
   gist-cli create --file=script.sh --stdin --description="My script" --public
   gist-cli get <gist_id>
   gist-cli list --per-page=10 --page=1
-  gist-cli list --username=octocat --visibility=secret
+  gist-cli list --username=octocat --visibility=public
   gist-cli update <gist_id> --description="Updated description"
   gist-cli update <gist_id> --file=hello.py --content="print('updated')"
   gist-cli delete <gist_id>
@@ -148,13 +149,13 @@ OUTPUT:
 }
 
 function showPruneHelp() {
-  console.log(`gist-cli prune - Delete Gists older than N days
+  console.log(`gist-cli prune - Delete Gists at least N days old
 
 USAGE:
   gist-cli prune --days=<n> [options]
 
 OPTIONS:
-  --days=<n>          Required. Delete Gists whose created_at is older than N days.
+  --days=<n>          Required. Delete Gists whose created_at is at least N days ago (inclusive).
   --visibility=<v>    Required. Filter by visibility: secret, public, all
   --dry-run           List candidates only, do not delete or prompt
   --yes               Skip confirmation prompt and delete immediately
@@ -421,14 +422,14 @@ async function cmdList(args: string[]) {
   // GitHub Gist API は visibility フィルターを持たないので、--visibility 指定時は
   // 全ページ取得→クライアント側で絞り込む。--page/--per-page は無視される。
   const client = new GistClient(getGitHubToken());
-  let gists;
+  let gists: Gist[];
   if (visibility !== "all") {
     if (perPage !== undefined || page !== undefined) {
       console.error(
         `Note: --visibility=${visibility} requires fetching all pages; --page/--per-page are ignored.`
       );
     }
-    if (username) {
+    if (username && visibility === "secret") {
       console.error(
         `Note: GitHub API only returns public Gists for /users/${username}/gists, so --visibility=secret will yield zero results.`
       );
@@ -507,7 +508,7 @@ async function cmdPrune(args: string[]) {
   const candidates = filterOlderThanDays(byVisibility, days);
 
   console.error(
-    `Found ${allGists.length} total Gists, ${byVisibility.length} matching visibility=${visibility}, ${candidates.length} older than ${days} days.`
+    `Found ${allGists.length} total Gists, ${byVisibility.length} matching visibility=${visibility}, ${candidates.length} at least ${days} days old.`
   );
 
   if (candidates.length === 0) {
@@ -515,7 +516,7 @@ async function cmdPrune(args: string[]) {
     return;
   }
 
-  console.log(`\nDeletion candidates (visibility=${visibility}, older than ${days} days, by created_at):\n`);
+  console.log(`\nDeletion candidates (visibility=${visibility}, at least ${days} days old, by created_at):\n`);
   for (const [i, gist] of candidates.entries()) {
     const files = Object.keys(gist.files).join(", ");
     const v = gist.public ? "Public" : "Secret";
