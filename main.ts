@@ -1,7 +1,12 @@
 import { McpServer } from "npm:@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { GistClient, formatGistInfo } from "./lib/gist.ts";
+import {
+  GistClient,
+  filterByVisibility,
+  filterOlderThanDays,
+  formatGistInfo,
+} from "./lib/gist.ts";
 
 // ログファイルのパス
 const LOG_FILE = "/tmp/gist-mcp-server.log";
@@ -350,6 +355,84 @@ server.tool(
           {
             type: "text" as const,
             text: `❌ Gist のスター削除中にエラーが発生しました: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  },
+);
+
+// 古い Gist を一括削除
+server.tool(
+  "prune_old_gists",
+  "指定した日数より古い Gist を一括削除します。可視性 (secret / public / all) で対象を絞り込め、デフォルトは secret のみです。dry_run を true にすると候補一覧のみ返します。",
+  {
+    days: z.number().int().min(0).describe("created_at がこの日数より古い Gist を対象にする (例: 30)"),
+    visibility: z.enum(["secret", "public", "all"]).optional().default("secret").describe("対象の可視性 (デフォルト: secret)"),
+    dry_run: z.boolean().optional().default(true).describe("true の場合は削除せず候補一覧のみ返す (デフォルト: true)")
+  },
+  async ({ days, visibility, dry_run }, _extra) => {
+    try {
+      const client = new GistClient(getGitHubToken());
+      const all = await client.listAllGists();
+      const byVisibility = filterByVisibility(all, visibility);
+      const candidates = filterOlderThanDays(byVisibility, days);
+
+      if (candidates.length === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `🧹 削除対象なし。条件: visibility=${visibility}, ${days}日以上前に作成。総 Gist 数: ${all.length}`
+            }
+          ]
+        };
+      }
+
+      const list = candidates.map((g, i) => {
+        const v = g.public ? "Public" : "Secret";
+        return `${i + 1}. ${g.description || "No description"} (${v})\n   ID: ${g.id}\n   Created: ${new Date(g.created_at).toLocaleString("ja-JP")}\n   URL: ${g.html_url}`;
+      }).join("\n\n");
+
+      if (dry_run) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `🔍 [dry-run] ${candidates.length} 件が削除対象です (visibility=${visibility}, ${days}日以上前):\n\n${list}\n\n実行するには dry_run=false を指定してください。`
+            }
+          ]
+        };
+      }
+
+      let deleted = 0;
+      const failures: string[] = [];
+      for (const g of candidates) {
+        try {
+          await client.deleteGist(g.id);
+          deleted++;
+        } catch (error) {
+          failures.push(`${g.id}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+
+      const summary = `✅ ${deleted}/${candidates.length} 件を削除しました (visibility=${visibility}, ${days}日以上前)。`;
+      const failText = failures.length > 0 ? `\n\n失敗 (${failures.length}件):\n${failures.join("\n")}` : "";
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `${summary}${failText}\n\n対象一覧:\n${list}`
+          }
+        ]
+      };
+    } catch (error) {
+      console.error("Tool error in prune_old_gists:", error);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `❌ Gist の一括削除中にエラーが発生しました: ${error instanceof Error ? error.message : String(error)}`
           }
         ]
       };

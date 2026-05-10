@@ -155,11 +155,30 @@ export class GistClient {
     const path = username
       ? `/users/${username}/gists`
       : '/gists';
-    
+
     const query = params.toString();
     const url = query ? `${path}?${query}` : path;
 
     return await this.request<Gist[]>(url);
+  }
+
+  // 全ページの Gist を取得 (ページネーションを内部で処理)
+  async listAllGists(username?: string, options?: {
+    since?: string;
+    per_page?: number;
+  }): Promise<Gist[]> {
+    const perPage = options?.per_page ?? 100;
+    const all: Gist[] = [];
+    for (let page = 1; ; page++) {
+      const batch = await this.listGists(username, {
+        per_page: perPage,
+        page,
+        since: options?.since,
+      });
+      all.push(...batch);
+      if (batch.length < perPage) break;
+    }
+    return all;
   }
 
   // Gist にスターを付ける
@@ -230,6 +249,21 @@ export class GistClient {
       files: gistFiles,
     });
   }
+}
+
+// 可視性フィルター: secret(=private), public, all
+export type GistVisibility = "secret" | "public" | "all";
+
+export function filterByVisibility(gists: Gist[], visibility: GistVisibility): Gist[] {
+  if (visibility === "all") return gists;
+  if (visibility === "secret") return gists.filter((g) => !g.public);
+  return gists.filter((g) => g.public);
+}
+
+// 指定日数より古い Gist のみを返す (created_at 基準)
+export function filterOlderThanDays(gists: Gist[], days: number, now: Date = new Date()): Gist[] {
+  const thresholdMs = now.getTime() - days * 24 * 60 * 60 * 1000;
+  return gists.filter((g) => new Date(g.created_at).getTime() < thresholdMs);
 }
 
 // ヘルパー関数
