@@ -139,6 +139,9 @@ OPTIONS:
                              Note: GitHub API has no visibility filter, so when
                              this is set to secret/public, all pages are fetched
                              and filtered client-side.
+                             Note: 'secret' is meaningful only for the authenticated
+                             user. /users/<username>/gists returns public Gists only,
+                             so --username + --visibility=secret yields zero results.
 
 OUTPUT:
   Displays a summary list of Gists with ID, description, files, and URL.`);
@@ -415,17 +418,6 @@ async function cmdList(args: string[]) {
   const page = getFlag(flags, "page");
   const visibility = parseVisibility(getFlag(flags, "visibility"), "all");
 
-  const perPageNum = perPage ? parseInt(perPage, 10) : 30;
-  const pageNum = page ? parseInt(page, 10) : 1;
-  if (isNaN(perPageNum) || perPageNum < 1 || perPageNum > 100) {
-    console.error("Error: --per-page must be an integer between 1 and 100.");
-    Deno.exit(1);
-  }
-  if (isNaN(pageNum) || pageNum < 1) {
-    console.error("Error: --page must be a positive integer.");
-    Deno.exit(1);
-  }
-
   // GitHub Gist API は visibility フィルターを持たないので、--visibility 指定時は
   // 全ページ取得→クライアント側で絞り込む。--page/--per-page は無視される。
   const client = new GistClient(getGitHubToken());
@@ -436,9 +428,24 @@ async function cmdList(args: string[]) {
         `Note: --visibility=${visibility} requires fetching all pages; --page/--per-page are ignored.`
       );
     }
+    if (username) {
+      console.error(
+        `Note: GitHub API only returns public Gists for /users/${username}/gists, so --visibility=secret will yield zero results.`
+      );
+    }
     const all = await client.listAllGists(username);
     gists = filterByVisibility(all, visibility);
   } else {
+    const perPageNum = perPage ? parseInt(perPage, 10) : 30;
+    const pageNum = page ? parseInt(page, 10) : 1;
+    if (isNaN(perPageNum) || perPageNum < 1 || perPageNum > 100) {
+      console.error("Error: --per-page must be an integer between 1 and 100.");
+      Deno.exit(1);
+    }
+    if (isNaN(pageNum) || pageNum < 1) {
+      console.error("Error: --page must be a positive integer.");
+      Deno.exit(1);
+    }
     gists = await client.listGists(username, {
       per_page: perPageNum,
       page: pageNum,

@@ -367,7 +367,7 @@ server.tool(
   "prune_old_gists",
   "指定した日数より古い Gist を一括削除します。可視性 (secret / public / all) で対象を絞り込め、デフォルトは secret のみです。dry_run を true にすると候補一覧のみ返します。",
   {
-    days: z.number().int().min(0).describe("created_at がこの日数より古い Gist を対象にする (例: 30)"),
+    days: z.number().int().min(1).describe("created_at がこの日数以上前の Gist を対象にする (例: 30)。AI 誤爆防止のため最小値は 1。"),
     visibility: z.enum(["secret", "public", "all"]).optional().default("secret").describe("対象の可視性 (デフォルト: secret)"),
     dry_run: z.boolean().optional().default(true).describe("true の場合は削除せず候補一覧のみ返す (デフォルト: true)")
   },

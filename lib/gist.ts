@@ -260,10 +260,11 @@ export function filterByVisibility(gists: Gist[], visibility: GistVisibility): G
   return gists.filter((g) => g.public);
 }
 
-// 指定日数より古い Gist のみを返す (created_at 基準)
+// 指定日数以上前に作成された Gist のみを返す (created_at 基準、inclusive)
+// 「N日以上前」= now - created >= N日 → created <= now - N日
 export function filterOlderThanDays(gists: Gist[], days: number, now: Date = new Date()): Gist[] {
   const thresholdMs = now.getTime() - days * 24 * 60 * 60 * 1000;
-  return gists.filter((g) => new Date(g.created_at).getTime() < thresholdMs);
+  return gists.filter((g) => new Date(g.created_at).getTime() <= thresholdMs);
 }
 
 // ヘルパー関数
