@@ -262,7 +262,7 @@ server.tool(
 
       const gistList = gists.map((gist, index) => {
         const files = Object.keys(gist.files).join(', ');
-        const visibility = gist.public ? 'Public' : 'Private';
+        const visibility = gist.public ? 'Public' : 'Secret';
         return `${index + 1}. ${gist.description || 'No description'} (${visibility})
    ID: ${gist.id}
    Files: ${files}

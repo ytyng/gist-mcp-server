@@ -152,7 +152,7 @@ function showPruneHelp() {
   console.log(`gist-cli prune - Delete Gists at least N days old
 
 USAGE:
-  gist-cli prune --days=<n> [options]
+  gist-cli prune --days=<n> --visibility=<v> [options]
 
 OPTIONS:
   --days=<n>          Required. Delete Gists whose created_at is at least N days ago (inclusive).
@@ -460,7 +460,7 @@ async function cmdList(args: string[]) {
 
   for (const [i, gist] of gists.entries()) {
     const files = Object.keys(gist.files).join(", ");
-    const v = gist.public ? "Public" : "Private";
+    const v = gist.public ? "Public" : "Secret";
     console.log(
       `${i + 1}. ${gist.description || "No description"} (${v})\n` +
       `   ID: ${gist.id}\n` +

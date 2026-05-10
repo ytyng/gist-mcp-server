@@ -282,7 +282,7 @@ export function getGistRawUrl(gist: Gist, filename: string): string | null {
 
 export function formatGistInfo(gist: Gist): string {
   const files = Object.keys(gist.files).join(', ');
-  const visibility = gist.public ? 'Public' : 'Private';
+  const visibility = gist.public ? 'Public' : 'Secret';
   const owner = gist.owner?.login || 'Anonymous';
   
   return `Gist ID: ${gist.id}
