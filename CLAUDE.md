@@ -107,6 +107,7 @@ gist-mcp-server/
 ### 拡張機能系
 6. **`star_gist`**: Gist にスターを付ける
 7. **`unstar_gist`**: Gist のスターを外す
+8. **`prune_old_gists`**: 指定日数以上前に作成された Gist を一括削除 (二重ゲート設計)
 
 ## 環境設定
 
@@ -150,6 +151,12 @@ GITHUB_TOKEN=your_github_personal_access_token_here
 - **方式**: Bearer Token
 - **ヘッダー**: `Authorization: Bearer <token>`
 
+### API 制約 (重要)
+
+- **visibility フィルター不在**: `/gists` には Secret/Public で絞り込む query parameter が存在しない。クライアント側で `gist.public` を見て弾くしかない。`/gists/public` は「全ユーザーの新着パブリック Gist」、`/gists/starred` は「自分がスターした Gist」で、認証ユーザー所有 Gist の visibility 絞り込みには使えない。
+- **`/users/<username>/gists` はパブリックのみ**: 他人の Secret Gist は API では取得不可能。CLI/MCP で `--username` + `--visibility=secret` を併用すると常に 0 件返る (ヘルプとランタイム警告で明示)。
+- **per_page 上限**: 1-100。`listAllGists` ではこの範囲にクランプし、`batch.length === 0` でも break して無限ループを防ぐ。
+
 ## 重要な実装ポイント
 
 ### 1. エラーハンドリング戦略
@@ -164,15 +171,28 @@ GITHUB_TOKEN=your_github_personal_access_token_here
 - **レスポンス型の統一**: GitHub API レスポンスの型定義
 
 ### 3. セキュリティとプライバシー
-- **デフォルトプライベート**: 明示的に指定しない限りプライベート Gist として作成
+- **デフォルト Secret**: 明示的に指定しない限り Secret Gist として作成
 - **権限最小化**: gist 権限のみを要求
 - **トークン管理**: 環境変数からの安全な取得
-
+- **可視性の表記統一**: ユーザー向け表示は `Secret` / `Public` で統一する (`Private` は使わない)。GitHub 公式が "Secret gist" と呼び、CLI/MCP のフラグ名も `--visibility=secret` のため。
 
 ### 4. ユーザビリティ
 - **日本語メッセージ**: エラー・成功メッセージの日本語対応
 - **詳細表示**: Gist 情報の分かりやすい整形表示
 - **ページネーション**: 大量 Gist の効率的な取得
+
+### 5. 破壊的操作の安全設計 (CLI と MCP の非対称性)
+
+破壊的操作 (例: `prune_old_gists` / `gist-cli prune`) は CLI と MCP で異なるゲートを設ける:
+
+- **CLI (人間が叩く)**: 必須フラグを明示要求する (`--days` と `--visibility` 両方必須)。`--yes` 無しなら確認プロンプト、`--dry-run` で候補確認。
+- **MCP (AI が呼ぶ)**: 安全側デフォルトに倒す。
+  - `visibility=secret` デフォルト (パブリック誤爆を防ぐ)
+  - `dry_run=true` デフォルト (うっかり呼び出しでは候補一覧のみ返す)
+  - `confirm=false` デフォルト + `dry_run=false` 時の必須化 (二重ゲート)
+  - 数値パラメータは AI 誤爆リスクが高い値を弾く (例: `days >= 1`)
+
+「CLI = 人間が叩くので明示要求」「MCP = AI が叩くので安全側デフォルト + 二重ゲート」の原則。新規破壊的機能を追加するときはこのパターンを踏襲する。
 
 ## トラブルシューティング
 
@@ -228,8 +248,12 @@ GITHUB_TOKEN=your_github_personal_access_token_here
    - 悪意のあるコンテンツの検出
 
 3. **プライバシー保護**
-   - デフォルトでプライベート Gist として作成
+   - デフォルトで Secret Gist として作成
    - 機密情報をログに出力しない
+
+### 既知の問題
+
+- **`create_gist` の verbose ログ出力 (要修正)**: `main.ts:73-78` の `create_gist` ハンドラが Gist 中身を `/tmp/gist-mcp-server.log` に平文・JSON エスケープ・raw bytes の3形式で全文ログ出力する。シークレット (API キー、秘密鍵等) を Gist 内容として渡した場合、ローカルアクセスを持つユーザーに流出するリスクあり。本番運用前に `DEBUG` 環境変数でゲートするか、verbose ログ自体を削除する必要がある (未対応、別 issue として追跡予定)。
 
 ## テスト戦略
 
