@@ -253,7 +253,20 @@ GITHUB_TOKEN=your_github_personal_access_token_here
 
 ### 既知の問題
 
-- **`create_gist` の verbose ログ出力 (要修正)**: `main.ts:73-78` の `create_gist` ハンドラが Gist 中身を `/tmp/gist-mcp-server.log` に平文・JSON エスケープ・raw bytes の3形式で全文ログ出力する。シークレット (API キー、秘密鍵等) を Gist 内容として渡した場合、ローカルアクセスを持つユーザーに流出するリスクあり。本番運用前に `DEBUG` 環境変数でゲートするか、verbose ログ自体を削除する必要がある (未対応、別 issue として追跡予定)。
+- **`create_gist` の verbose ログ出力 (対応済み)**: `create_gist` ハンドラは Gist 中身を `/tmp/gist-mcp-server.log` に平文・JSON エスケープ・raw bytes の3形式で全文ログ出力していた。現在は `create_gist` の詳細ログ全体 (Gist 内容に加え description・Gist URL・ID 等のメタデータも含む) を `writeDebugLog` 経由にし、`DEBUG=1` / `DEBUG=true` の時のみ出力するようゲート化した (`main.ts` の `VERBOSE_LOG`)。Secret Gist の URL は推測困難＝アクセス資格そのものなので既定では書かない。`main()` の起動マーカー (version / ログパス) のみ非機密として常時出力する。デバッグで内容を見たい時のみ `DEBUG` を立てる。
+
+## 環境変数による設定の遅延ロード
+
+`GITHUB_TOKEN` の解決は `lib/config.ts` の `getGitHubToken()` に一本化されており、**初回ツール呼び出し時に一度だけ**解決して memoize する (起動時には解決しない)。これは MCP プロセス起動のたびに 1Password CLI (`op read`) の認証ダイアログが出るのを防ぐため。解決順:
+
+1. 環境変数 `GITHUB_TOKEN` — リテラル (最優先、subprocess を起動しない)
+2. 環境変数 `GIST_MCP_SERVER_ENV_GETTER_COMMAND` — 単一コマンド (例: `op read "op://development/gist-mcp-server/.env"`) を **shell 非経由** (`Deno.Command`, コマンドインジェクション不可) で実行し、stdout を `.env` テキストとしてパースして `GITHUB_TOKEN` を取り出す (遅延実行、120s timeout)
+
+注意点:
+- getter command を使う場合、Deno の `--allow-run` がそのバイナリ (既定は `op`) に必要。`launch.sh` と `gist-cli.ts` のシバンに `--allow-run=op` を付与済み。別の秘密マネージャー (pass / vault 等) を使う場合はここを変更する。
+- キャッシュはプロセス終了まで永続。トークンをローテーション・失効させた場合は再起動が必要。
+- 並行する初回呼び出しは in-flight promise で 1 本に束ね、`op` の認証ダイアログが複数出ないようにしている。
+- 詳細は `loadenv-lazy` スキル参照。
 
 ## テスト戦略
 

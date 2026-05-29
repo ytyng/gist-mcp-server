@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-net --allow-env
+#!/usr/bin/env -S deno run --allow-read --allow-net --allow-env --allow-run=op
 
 import {
   type Gist,
@@ -8,6 +8,7 @@ import {
   filterOlderThanDays,
   formatGistInfo,
 } from "./lib/gist.ts";
+import { getGitHubToken } from "./lib/config.ts";
 
 function parseVisibility(value: string | undefined, defaultValue: GistVisibility): GistVisibility {
   if (value === undefined) return defaultValue;
@@ -23,15 +24,6 @@ async function promptYesNo(message: string): Promise<boolean> {
   if (n === null) return false;
   const answer = new TextDecoder().decode(buf.subarray(0, n)).trim().toLowerCase();
   return answer === "y" || answer === "yes";
-}
-
-function getGitHubToken(): string {
-  const token = Deno.env.get("GITHUB_TOKEN");
-  if (!token) {
-    console.error("Error: GITHUB_TOKEN environment variable is not set.");
-    Deno.exit(1);
-  }
-  return token;
 }
 
 function showHelp() {
@@ -69,7 +61,13 @@ EXAMPLES:
 Run 'gist-cli <subcommand> --help' for detailed usage of each subcommand.
 
 ENVIRONMENT:
-  GITHUB_TOKEN  Required. GitHub Personal Access Token with 'gist' scope.`);
+  GITHUB_TOKEN  GitHub Personal Access Token with 'gist' scope.
+                Takes precedence; resolved without spawning a subprocess.
+  GIST_MCP_SERVER_ENV_GETTER_COMMAND
+                Fallback used when GITHUB_TOKEN is unset. A single command
+                (e.g. 'op read "op://vault/item/.env"') whose stdout is parsed
+                as .env text to obtain GITHUB_TOKEN. Run lazily on first use.
+                Requires --allow-run for the command's binary (op by default).`);
 }
 
 function showCreateHelp() {
@@ -284,7 +282,7 @@ async function cmdCreate(args: string[]) {
     }
   }
 
-  const client = new GistClient(getGitHubToken());
+  const client = new GistClient(await getGitHubToken());
   const gist = await client.createGist({ description, files, public: isPublic });
   console.log(formatGistInfo(gist));
 }
@@ -303,7 +301,7 @@ async function cmdGet(args: string[]) {
     Deno.exit(1);
   }
 
-  const client = new GistClient(getGitHubToken());
+  const client = new GistClient(await getGitHubToken());
   const gist = await client.getGist(gistId);
   console.log(formatGistInfo(gist));
 
@@ -379,7 +377,7 @@ async function cmdUpdate(args: string[]) {
     Deno.exit(1);
   }
 
-  const client = new GistClient(getGitHubToken());
+  const client = new GistClient(await getGitHubToken());
   const gist = await client.updateGist(gistId, {
     description,
     files: Object.keys(files).length > 0 ? files : undefined,
@@ -401,7 +399,7 @@ async function cmdDelete(args: string[]) {
     Deno.exit(1);
   }
 
-  const client = new GistClient(getGitHubToken());
+  const client = new GistClient(await getGitHubToken());
   await client.deleteGist(gistId);
   console.log(`Gist ${gistId} has been deleted.`);
 }
@@ -421,7 +419,7 @@ async function cmdList(args: string[]) {
 
   // GitHub Gist API は visibility フィルターを持たないので、--visibility 指定時は
   // 全ページ取得→クライアント側で絞り込む。--page/--per-page は無視される。
-  const client = new GistClient(getGitHubToken());
+  const client = new GistClient(await getGitHubToken());
   let gists: Gist[];
   if (visibility !== "all") {
     if (perPage !== undefined || page !== undefined) {
@@ -486,8 +484,10 @@ async function cmdPrune(args: string[]) {
     Deno.exit(1);
   }
   const days = parseInt(daysStr, 10);
-  if (isNaN(days) || days < 0) {
-    console.error("Error: --days must be a non-negative integer.");
+  // days=0 は「0日以上前」= 全 Gist が対象になり --yes と併用で全削除になる。
+  // MCP 側 (z.number().int().min(1)) と CLAUDE.md の「days >= 1」原則に合わせて弾く。
+  if (isNaN(days) || days < 1) {
+    console.error("Error: --days must be a positive integer (>= 1).");
     Deno.exit(1);
   }
 
@@ -500,7 +500,7 @@ async function cmdPrune(args: string[]) {
   const dryRun = hasFlag(flags, "dry-run");
   const skipConfirm = hasFlag(flags, "yes");
 
-  const client = new GistClient(getGitHubToken());
+  const client = new GistClient(await getGitHubToken());
 
   console.error(`Fetching all Gists for the authenticated user...`);
   const allGists = await client.listAllGists();
@@ -574,7 +574,7 @@ async function cmdStar(args: string[]) {
     Deno.exit(1);
   }
 
-  const client = new GistClient(getGitHubToken());
+  const client = new GistClient(await getGitHubToken());
   await client.starGist(gistId);
   console.log(`Gist ${gistId} has been starred.`);
 }
@@ -593,7 +593,7 @@ async function cmdUnstar(args: string[]) {
     Deno.exit(1);
   }
 
-  const client = new GistClient(getGitHubToken());
+  const client = new GistClient(await getGitHubToken());
   await client.unstarGist(gistId);
   console.log(`Gist ${gistId} has been unstarred.`);
 }
