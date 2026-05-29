@@ -7,20 +7,39 @@ import {
   filterOlderThanDays,
   formatGistInfo,
 } from "./lib/gist.ts";
+import { getGitHubToken } from "./lib/config.ts";
 
 // ログファイルのパス
 const LOG_FILE = "/tmp/gist-mcp-server.log";
+
+// DEBUG=1 / DEBUG=true のときのみ詳細ログを出力する。
+// create_gist の詳細ログは Gist 内容のほか description・URL・ID などメタデータも含み、
+// Secret Gist の URL は推測困難＝アクセス資格そのものなので、既定ではログに書かない。
+const VERBOSE_LOG = (() => {
+  const v = Deno.env.get("DEBUG");
+  return v === "1" || v === "true";
+})();
 
 // ログ出力関数
 function writeLog(message: string) {
   const timestamp = new Date().toISOString();
   const logMessage = `[${timestamp}] ${message}\n`;
-  
+
   try {
     Deno.writeTextFileSync(LOG_FILE, logMessage, { append: true });
   } catch (error) {
     console.error("Failed to write log:", error);
   }
+}
+
+// Gist 内容・メタデータを含みうる詳細ログ。DEBUG 指定時のみ出力する。
+function writeDebugLog(message: string) {
+  if (VERBOSE_LOG) writeLog(message);
+}
+
+// GITHUB_TOKEN を遅延解決して GistClient を生成する。
+async function getClient(): Promise<GistClient> {
+  return new GistClient(await getGitHubToken());
 }
 
 // MCP サーバーの説明を読み込む
@@ -34,14 +53,6 @@ async function loadInstructions(): Promise<string> {
     // フォールバック用の基本的な説明
     return "このサーバーは、GitHub Gist の作成・管理を行うためのツールを提供します。コードスニペットやファイルの共有に便利です。";
   }
-}
-
-function getGitHubToken(): string {
-  const token = Deno.env.get("GITHUB_TOKEN");
-  if (!token) {
-    throw new Error("GITHUB_TOKEN 環境変数が設定されていません");
-  }
-  return token;
 }
 
 const server = new McpServer({
@@ -63,36 +74,37 @@ server.tool(
   },
   async ({ description, files, public: isPublic }, _extra) => {
     try {
-      writeLog(`=== CREATE_GIST START ===`);
-      writeLog(`Description: ${description}`);
-      writeLog(`Public: ${isPublic}`);
-      writeLog(`Files count: ${Object.keys(files).length}`);
-      
-      // 各ファイルの詳細をログ出力
+      // 以下の詳細ログは description・Gist 内容など機密を含みうるため DEBUG 指定時のみ
+      writeDebugLog(`=== CREATE_GIST START ===`);
+      writeDebugLog(`Description: ${description}`);
+      writeDebugLog(`Public: ${isPublic}`);
+      writeDebugLog(`Files count: ${Object.keys(files).length}`);
+
       for (const [filename, fileData] of Object.entries(files)) {
-        writeLog(`File: ${filename}`);
-        writeLog(`Content length: ${fileData.content.length}`);
-        writeLog(`Content (first 100 chars): ${fileData.content.substring(0, 100)}`);
-        writeLog(`Content (escaped): ${JSON.stringify(fileData.content)}`);
-        writeLog(`Content (raw bytes): ${Array.from(fileData.content).map(c => c.charCodeAt(0)).join(',')}`);
-        writeLog(`--- End of ${filename} ---`);
+        writeDebugLog(`File: ${filename}`);
+        writeDebugLog(`Content length: ${fileData.content.length}`);
+        writeDebugLog(`Content (first 100 chars): ${fileData.content.substring(0, 100)}`);
+        writeDebugLog(`Content (escaped): ${JSON.stringify(fileData.content)}`);
+        writeDebugLog(`Content (raw bytes): ${Array.from(fileData.content).map(c => c.charCodeAt(0)).join(',')}`);
+        writeDebugLog(`--- End of ${filename} ---`);
       }
-      
-      const client = new GistClient(getGitHubToken());
-      
-      writeLog(`Calling GitHub API...`);
+
+      const client = await getClient();
+
+      writeDebugLog(`Calling GitHub API...`);
       const gist = await client.createGist({
         description,
         files,
         public: isPublic
       });
-      
-      writeLog(`GitHub API response: ${gist.id}`);
-      writeLog(`Gist URL: ${gist.html_url}`);
+
+      // Secret Gist の URL は推測困難なアクセス資格なので DEBUG 時のみ記録する
+      writeDebugLog(`GitHub API response: ${gist.id}`);
+      writeDebugLog(`Gist URL: ${gist.html_url}`);
 
       const info = formatGistInfo(gist);
-      writeLog(`=== CREATE_GIST SUCCESS ===`);
-      
+      writeDebugLog(`=== CREATE_GIST SUCCESS ===`);
+
       return {
         content: [
           {
@@ -102,8 +114,8 @@ server.tool(
         ]
       };
     } catch (error) {
-      writeLog(`=== CREATE_GIST ERROR ===`);
-      writeLog(`Error: ${error}`);
+      writeDebugLog(`=== CREATE_GIST ERROR ===`);
+      writeDebugLog(`Error: ${error}`);
       console.error("Tool error in create_gist:", error);
       return {
         content: [
@@ -126,7 +138,7 @@ server.tool(
   },
   async ({ gist_id }, _extra) => {
     try {
-      const client = new GistClient(getGitHubToken());
+      const client = await getClient();
       const gist = await client.getGist(gist_id);
 
       const info = formatGistInfo(gist);
@@ -169,7 +181,7 @@ server.tool(
   },
   async ({ gist_id, description, files }, _extra) => {
     try {
-      const client = new GistClient(getGitHubToken());
+      const client = await getClient();
       const gist = await client.updateGist(gist_id, {
         description,
         files
@@ -207,7 +219,7 @@ server.tool(
   },
   async ({ gist_id }, _extra) => {
     try {
-      const client = new GistClient(getGitHubToken());
+      const client = await getClient();
       await client.deleteGist(gist_id);
 
       return {
@@ -243,7 +255,7 @@ server.tool(
   },
   async ({ username, per_page, page }, _extra) => {
     try {
-      const client = new GistClient(getGitHubToken());
+      const client = await getClient();
       const gists = await client.listGists(username, {
         per_page,
         page
@@ -303,7 +315,7 @@ server.tool(
   },
   async ({ gist_id }, _extra) => {
     try {
-      const client = new GistClient(getGitHubToken());
+      const client = await getClient();
       await client.starGist(gist_id);
 
       return {
@@ -337,7 +349,7 @@ server.tool(
   },
   async ({ gist_id }, _extra) => {
     try {
-      const client = new GistClient(getGitHubToken());
+      const client = await getClient();
       await client.unstarGist(gist_id);
 
       return {
@@ -374,7 +386,7 @@ server.tool(
   },
   async ({ days, visibility, dry_run, confirm }, _extra) => {
     try {
-      const client = new GistClient(getGitHubToken());
+      const client = await getClient();
       const all = await client.listAllGists();
       const byVisibility = filterByVisibility(all, visibility);
       const candidates = filterOlderThanDays(byVisibility, days);

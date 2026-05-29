@@ -9,19 +9,12 @@ cd "$(dirname "$0")" || exit 1
 # .loadenv.sh が存在する場合、環境変数を読み込む
 [ -f .loadenv.sh ] && source .loadenv.sh
 
-# .envファイルが存在する場合、環境変数を読み込む
-# つまり、launch.sh 経由で起動して、.env があるなら、環境変数の指定は不要
-# echo はできない。(JSON を出力する必要がある)
-if [ -f .env ]; then
-  set -a  # 自動エクスポートモードをオン
-  source .env
-  set +a  # 自動エクスポートモードをオフ
-fi
-
 # 必要な権限でDenoを実行
+# --allow-run=op: GITHUB_TOKEN を遅延ロードする getter command (op read) の実行用
 /opt/homebrew/bin/deno run \
   --allow-read=./ \
   --allow-net \
   --allow-write=$HOME/Downloads,/tmp \
   --allow-env \
+  --allow-run=op \
   main.ts
