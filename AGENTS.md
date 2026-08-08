@@ -17,7 +17,11 @@ gist-mcp-server は、GitHub Gist の作成・管理用の MCP (Model Context Pr
 ## 技術スタック
 
 - **言語**: TypeScript
-- **ランタイム**: Deno (v1.40以降)
+- **ランタイム**: Deno (v2.1 以降)
+  - 以前は「v1.40 以降」と書いてあったが実態と合っていなかった (`main` の
+    `deno.lock` が既に lockfile v4 = Deno 2.x 必須だった)。現在の下限は
+    `jsr:` 指定子 (1.42+)・`Deno.errors.NotCapable` (2.0+)・lockfile v5 (2.1+)
+    で決まる
 - **MCP フレームワーク**: `@modelcontextprotocol/sdk`
 - **スキーマ検証**: Zod
 - **テスト**: Deno 標準テストランナー
@@ -68,10 +72,12 @@ gist-mcp-server/
 ├── main.ts                     # MCP サーバーのエントリーポイント、ツール定義
 ├── lib/
 │   ├── gist.ts                 # GitHub Gist API 通信ロジック、型定義
+│   ├── config.ts               # 設定ファイルの遅延ロード、config_override_command
+│   ├── config_test.ts          # config.ts のユニットテスト
 │   └── mcp-server-instructions.md # MCP サーバーの説明文
 ├── test-request/               # 動作確認用スクリプト
 ├── deno.json                   # Deno 設定、依存関係
-├── .env.example                # 環境変数テンプレート
+├── config.example.yaml         # 設定ファイルのテンプレート
 ├── launch.sh                   # 実行用スクリプト
 └── README.md                   # ユーザー向けドキュメント
 ```
@@ -109,24 +115,32 @@ gist-mcp-server/
 7. **`unstar_gist`**: Gist のスターを外す
 8. **`prune_old_gists`**: 指定日数以上前に作成された Gist を一括削除 (二重ゲート設計)
 
-## 環境設定
+## 設定
 
-### 必須環境変数
-`.env` ファイルに以下を設定：
-```bash
-GITHUB_TOKEN=your_github_personal_access_token_here
+### 設定ファイル
+
+設定は **リポジトリの外**、`${HOME}/.config/gist-mcp-server/config.yaml` に置く
+(`config.yml` も可。両方あれば `config.yaml` が優先)。
+
+```yaml
+github_token: your_github_personal_access_token_here
 ```
+
+プロジェクトフォルダの `.env` / `.loadenv.sh` は**使わない**。起動元が複数あり
+(launch.sh・gist-cli のラッパー)、それぞれが同じ .env を source する構成だったため、
+設定の置き場を 1 箇所に寄せた。
 
 ### GitHub Personal Access Token の取得
 1. GitHub Settings > Developer settings > Personal access tokens > Tokens (classic)
 2. "Generate new token (classic)" をクリック
 3. 必要な権限を選択：
    - `gist` - Gist の作成・読み書き・削除
-4. トークンを生成し、`.env` ファイルに設定
+4. トークンを生成し、設定ファイルの `github_token` に設定
 
 ### 開発環境の準備
 1. Deno のインストール
-2. `.env.example` を `.env` にコピーして GitHub トークンを設定
+2. `config.example.yaml` を `~/.config/gist-mcp-server/config.yaml` にコピーして
+   トークンを設定 (`chmod 600`)
 3. `./launch.sh` で動作確認
 
 ## GitHub Gist API 仕様とエンドポイント
@@ -200,11 +214,8 @@ GITHUB_TOKEN=your_github_personal_access_token_here
 
 1. **GitHub トークンエラー**
    ```bash
-   # 環境変数の確認
-   echo $GITHUB_TOKEN
-
-   # .env ファイルの確認
-   cat .env
+   # 設定ファイルの確認
+   cat ~/.config/gist-mcp-server/config.yaml
    ```
 
 2. **ネットワーク接続問題**
@@ -239,8 +250,8 @@ GITHUB_TOKEN=your_github_personal_access_token_here
 ## セキュリティ考慮事項
 
 1. **GitHub トークンの管理**
-   - `.env` ファイルを `.gitignore` に含める
-   - 本番環境では環境変数での設定を推奨
+   - 設定ファイルはリポジトリ外 (`~/.config/gist-mcp-server/`) に置き、パーミッションは 600
+   - 平文を置きたくない場合は `config_override_command` で秘密マネージャーから取得する
    - 最小権限（gist のみ）の原則
 
 2. **入力値検証**
@@ -255,20 +266,53 @@ GITHUB_TOKEN=your_github_personal_access_token_here
 
 - **`create_gist` の verbose ログ出力 (対応済み)**: `create_gist` ハンドラは Gist 中身を `/tmp/gist-mcp-server.log` に平文・JSON エスケープ・raw bytes の3形式で全文ログ出力していた。現在は `create_gist` の詳細ログ全体 (Gist 内容に加え description・Gist URL・ID 等のメタデータも含む) を `writeDebugLog` 経由にし、`DEBUG=1` / `DEBUG=true` の時のみ出力するようゲート化した (`main.ts` の `VERBOSE_LOG`)。Secret Gist の URL は推測困難＝アクセス資格そのものなので既定では書かない。`main()` の起動マーカー (version / ログパス) のみ非機密として常時出力する。デバッグで内容を見たい時のみ `DEBUG` を立てる。
 
-## 環境変数による設定の遅延ロード
+## 設定の遅延ロード
 
-`GITHUB_TOKEN` の解決は `lib/config.ts` の `getGitHubToken()` に一本化されており、**初回ツール呼び出し時に一度だけ**解決して memoize する (起動時には解決しない)。これは MCP プロセス起動のたびに 1Password CLI (`op read`) の認証ダイアログが出るのを防ぐため。解決順:
+設定の解決は `lib/config.ts` の `getGitHubToken()` / `loadConfig()` に一本化されており、
+**初回ツール呼び出し時に一度だけ**解決して memoize する (起動時には解決しない)。
+これは MCP プロセス起動のたびに 1Password CLI (`op read`) の認証ダイアログが
+出るのを防ぐため。解決順:
 
-1. 環境変数 `GITHUB_TOKEN` — リテラル (最優先、subprocess を起動しない)
-2. 環境変数 `GIST_MCP_SERVER_ENV_GETTER_COMMAND` — 単一コマンド (例: `op read "op://development/gist-mcp-server/.env"`) を **shell 非経由** (`Deno.Command`, コマンドインジェクション不可) で実行し、stdout を `.env` テキストとしてパースして `GITHUB_TOKEN` を取り出す (遅延実行、120s timeout)
+1. 環境変数 `GITHUB_TOKEN` — リテラル (最優先。設定ファイルを読まない)
+2. 設定ファイル `~/.config/gist-mcp-server/config.yaml` の `github_token`
+   (`config_override_command` があれば、その出力 YAML を再帰マージした後の値)
+
+`config_override_command` は queryfolio の同名キーと同じ設計:
+
+- 標準出力の **YAML** をローカル設定へ再帰マージする (マッピングは再帰、
+  スカラーと配列は丸ごと置換)
+- 取得した YAML 側の `config_override_command` は辿らない (無限再帰を避けるため
+  マージ後に削除する)
+- **shell 非経由**で実行する (`Deno.Command` + 引用符を考慮した `splitCommand`)。
+  パイプ・リダイレクト・変数展開は使えず、コマンドインジェクションの余地も無い
+- 120s timeout。キーはあるが空文字・非文字列なら **エラー** (黙ってローカル設定へ
+  フォールバックしない。意図しないアカウントのトークンを使わないため)
 
 注意点:
-- getter command を使う場合、Deno の `--allow-run` がそのバイナリ (既定は `op`) に必要。`launch.sh` と `gist-cli.ts` のシバンに `--allow-run=op` を付与済み。別の秘密マネージャー (pass / vault 等) を使う場合はここを変更する。
+- `config_override_command` を使う場合、Deno の `--allow-run` がそのバイナリ
+  (既定は `op`) に必要。`launch.sh` と `gist-cli.ts` のシバンに `--allow-run=op` を付与済み。
+  別の秘密マネージャー (pass / vault 等) を使う場合はここを変更する。
+- `launch.sh` の `--allow-read` に `$HOME/.config/gist-mcp-server` を含めること。
+  含めないと設定ファイルの読み取りが `NotCapable` になり、`GITHUB_TOKEN` 環境変数が
+  無い限りトークンを解決できない (`findConfigFile` は NotCapable を「ファイル無し」
+  として扱うので、権限漏れは "設定していない" と同じ症状で出る)。
 - キャッシュはプロセス終了まで永続。トークンをローテーション・失効させた場合は再起動が必要。
-- 並行する初回呼び出しは in-flight promise で 1 本に束ね、`op` の認証ダイアログが複数出ないようにしている。
-- 詳細は `loadenv-lazy` スキル参照。
+- 並行する初回呼び出しは in-flight promise で 1 本に束ね、`op` の認証ダイアログが
+  複数出ないようにしている。
+- 環境変数 `GIST_MCP_SERVER_CONFIG_YAML` で設定ファイルの内容を丸ごと差し替えられる
+  (開発・テスト用)。
+- **旧仕様からの移行**: `.env` / `.loadenv.sh` の読み込みと
+  `GIST_MCP_SERVER_ENV_GETTER_COMMAND` (stdout が `.env` テキスト) は廃止した。
 
 ## テスト戦略
+
+### ユニットテスト
+```bash
+deno test --allow-env --allow-read --allow-write --allow-run lib/
+```
+`lib/config_test.ts` が設定の読み込み (YAML パース・再帰マージ・
+`config_override_command` の実行・解決順・設定ファイルの探索) を検証する。
+`--allow-write` はテンポラリの HOME に設定ファイルを置くために要る。
 
 ### 動作確認テスト
 - `test-request/` スクリプト群による API テスト

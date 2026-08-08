@@ -1,7 +1,9 @@
 {
   "imports": {
     "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.9.0",
-    "zod": "npm:zod@^3.24.2"
+    "zod": "npm:zod@^3.24.2",
+    "@std/yaml": "jsr:@std/yaml@^1.0.5",
+    "@std/assert": "jsr:@std/assert@^1.0.10"
   },
   "compilerOptions": {
     "noImplicitAny": false

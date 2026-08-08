@@ -21,7 +21,12 @@ This MCP server provides integration with the GitHub Gist API, enabling AI assis
 
 ### Prerequisites
 
-- **Deno**: v1.40 or later
+- **Deno**: v2.1 or later
+
+  > The stated minimum used to be v1.40, but that was already stale: `deno.lock`
+  > on `main` was lockfile v4, which needs Deno 2.x. This version adds a `jsr:`
+  > specifier (`@std/yaml`, needs 1.42+), `Deno.errors.NotCapable` (2.0+), and
+  > writes a v5 lockfile (2.1+), so the real floor is now v2.1.
 - **GitHub Personal Access Token**: A token with Gist permissions
 
 ### 1. Clone the Repository
@@ -31,36 +36,65 @@ git clone <repository-url>
 cd gist-mcp-server
 ```
 
-### 2. Configure Environment Variables
+### 2. Create the Config File
 
-Copy `.env.example` to create a `.env` file and set your GitHub token:
+The config lives outside the repository, at `~/.config/gist-mcp-server/config.yaml`:
 
 ```bash
-cp .env.example .env
+mkdir -p ~/.config/gist-mcp-server
+cp config.example.yaml ~/.config/gist-mcp-server/config.yaml
+chmod 600 ~/.config/gist-mcp-server/config.yaml
 ```
 
-Edit the `.env` file:
+Edit it and set your token:
 
-```bash
+```yaml
 # GitHub Personal Access Token
 # Required permission: gist (create, read, write, delete Gists)
-GITHUB_TOKEN=your_github_token_here
+github_token: your_github_token_here
 ```
 
-#### Alternative: lazy loading from a secret manager
+`config.yml` (the `.yml` spelling) is also accepted; `config.yaml` wins when both
+exist. The file holds a token in plaintext, so keep it at `600`.
 
-Instead of storing the token in `.env`, you can have the server fetch it on first
-use from a secret manager (e.g. 1Password CLI). Set `GIST_MCP_SERVER_ENV_GETTER_COMMAND`
-to a single command whose stdout is `.env`-formatted text containing `GITHUB_TOKEN`:
+#### Overriding the config from a secret manager
 
-```bash
-export GIST_MCP_SERVER_ENV_GETTER_COMMAND='op read "op://vault/gist-mcp-server/.env"'
+Instead of writing the token into the file, you can have it fetched on first use
+from a secret manager (e.g. 1Password CLI). Set `config_override_command` to a
+single command whose **stdout is YAML**, and that YAML is merged over the file:
+
+```yaml
+config_override_command: op read "op://vault/gist-mcp-server/config-yaml"
 ```
 
-The command runs lazily on the first tool call (not at startup), so launching the
-server does not trigger a secret-manager auth prompt. Plain `GITHUB_TOKEN` takes
-precedence when both are set. When using a getter, Deno needs `--allow-run` for the
-command's binary (`launch.sh` already passes `--allow-run=op`).
+Merge rules (the same as queryfolio):
+
+- Mappings are merged recursively; scalars and lists are replaced wholesale.
+- A `config_override_command` inside the fetched YAML is **not** followed; the key
+  is dropped after merging.
+- The command runs **without a shell** (arguments are split honouring quotes, so
+  pipes, redirects and variable expansion do not work). It has a 120-second timeout.
+- It runs lazily on the first tool call (not at startup), so launching the server
+  does not trigger a secret-manager auth prompt, and the result is cached for the
+  life of the process.
+- Deno needs `--allow-run` for the command's binary (`launch.sh` already passes
+  `--allow-run=op`).
+
+If the key is present but is not a non-empty string, that is an error — the server
+will not silently fall back to the local-only config.
+
+#### Environment variables
+
+| Variable | Effect |
+|---|---|
+| `GITHUB_TOKEN` | Used as the token directly. Takes precedence and skips reading the config file entirely. |
+| `GIST_MCP_SERVER_CONFIG_YAML` | Replaces the whole config file content (for development). |
+
+> **Migrating from `.env`**: earlier versions read `.env` / `.loadenv.sh` from the
+> project folder and supported `GIST_MCP_SERVER_ENV_GETTER_COMMAND`. Both are gone.
+> Move `GITHUB_TOKEN=...` into `github_token:` in the config file, and replace the
+> getter command with `config_override_command` (its output is YAML now, not `.env`
+> text).
 
 ### 3. Obtain a GitHub Personal Access Token
 
@@ -68,7 +102,7 @@ command's binary (`launch.sh` already passes `--allow-run=op`).
 2. Click "Generate new token (classic)"
 3. Select the required permission:
    - `gist` - Create, read, write, and delete Gists
-4. Generate the token and add it to your `.env` file
+4. Generate the token and set it as `github_token` in your config file
 
 ### 4. Verify Installation
 
@@ -194,7 +228,7 @@ gist-mcp-server/
 │   └── mcp-server-instructions.md  # MCP server description
 ├── test-request/                   # Manual testing scripts
 ├── deno.json                       # Deno configuration
-├── .env.example                    # Environment variable template
+├── config.example.yaml             # Config file template
 ├── launch.sh                       # Launch script
 ├── CLAUDE.md                       # Claude Code guide
 └── README.md                       # This file
@@ -234,7 +268,7 @@ Primary API endpoints used:
 ### Common Issues
 
 1. **Authentication Error (401 Unauthorized)**
-   - Verify that `GITHUB_TOKEN` is correctly set in your `.env` file
+   - Verify that `github_token` is correctly set in `~/.config/gist-mcp-server/config.yaml`
    - Confirm the token has the `gist` permission
    - Check if the token has expired
 
@@ -263,7 +297,7 @@ Starting gist-mcp-server v1.0.0
 
 ## Security Considerations
 
-- **API Token Management**: Do not commit the `.env` file to the repository
+- **API Token Management**: The config file lives outside the repository (`~/.config/gist-mcp-server/`), so the token is never near the working tree
 - **Private by Default**: All Gists are created as private by default
 - **Least Privilege**: Use a token with only the minimum required permission (`gist`)
 - **Sensitive Data**: Do not store sensitive information in Gists
