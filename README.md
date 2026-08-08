@@ -47,6 +47,21 @@ Edit the `.env` file:
 GITHUB_TOKEN=your_github_token_here
 ```
 
+#### Alternative: lazy loading from a secret manager
+
+Instead of storing the token in `.env`, you can have the server fetch it on first
+use from a secret manager (e.g. 1Password CLI). Set `GIST_MCP_SERVER_ENV_GETTER_COMMAND`
+to a single command whose stdout is `.env`-formatted text containing `GITHUB_TOKEN`:
+
+```bash
+export GIST_MCP_SERVER_ENV_GETTER_COMMAND='op read "op://vault/gist-mcp-server/.env"'
+```
+
+The command runs lazily on the first tool call (not at startup), so launching the
+server does not trigger a secret-manager auth prompt. Plain `GITHUB_TOKEN` takes
+precedence when both are set. When using a getter, Deno needs `--allow-run` for the
+command's binary (`launch.sh` already passes `--allow-run=op`).
+
 ### 3. Obtain a GitHub Personal Access Token
 
 1. Go to GitHub Settings > Developer settings > Personal access tokens > Tokens (classic)
