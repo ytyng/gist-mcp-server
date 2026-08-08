@@ -17,7 +17,11 @@ gist-mcp-server は、GitHub Gist の作成・管理用の MCP (Model Context Pr
 ## 技術スタック
 
 - **言語**: TypeScript
-- **ランタイム**: Deno (v1.40以降)
+- **ランタイム**: Deno (v2.1 以降)
+  - 以前は「v1.40 以降」と書いてあったが実態と合っていなかった (`main` の
+    `deno.lock` が既に lockfile v4 = Deno 2.x 必須だった)。現在の下限は
+    `jsr:` 指定子 (1.42+)・`Deno.errors.NotCapable` (2.0+)・lockfile v5 (2.1+)
+    で決まる
 - **MCP フレームワーク**: `@modelcontextprotocol/sdk`
 - **スキーマ検証**: Zod
 - **テスト**: Deno 標準テストランナー

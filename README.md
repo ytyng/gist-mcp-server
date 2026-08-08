@@ -21,7 +21,12 @@ This MCP server provides integration with the GitHub Gist API, enabling AI assis
 
 ### Prerequisites
 
-- **Deno**: v1.40 or later
+- **Deno**: v2.1 or later
+
+  > The stated minimum used to be v1.40, but that was already stale: `deno.lock`
+  > on `main` was lockfile v4, which needs Deno 2.x. This version adds a `jsr:`
+  > specifier (`@std/yaml`, needs 1.42+), `Deno.errors.NotCapable` (2.0+), and
+  > writes a v5 lockfile (2.1+), so the real floor is now v2.1.
 - **GitHub Personal Access Token**: A token with Gist permissions
 
 ### 1. Clone the Repository
