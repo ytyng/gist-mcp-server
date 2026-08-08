@@ -1,0 +1,24 @@
+# gist-mcp-server の設定ファイル
+#
+# 置き場所: ${HOME}/.config/gist-mcp-server/config.yaml
+#   mkdir -p ~/.config/gist-mcp-server
+#   cp config.example.yaml ~/.config/gist-mcp-server/config.yaml
+#   chmod 600 ~/.config/gist-mcp-server/config.yaml
+#
+# トークンを平文で持つため、パーミッションは 600 にしておくこと。
+
+# GitHub Personal Access Token
+# GitHub の Settings > Developer settings > Personal access tokens から取得する。
+# 必要な権限: gist (Gist の作成・読み書き・削除)
+github_token: your_github_token_here
+
+# 標準出力に YAML を返すコマンド。その YAML をこのファイルへ再帰マージする。
+# 1Password 等の保管庫にトークンを置き、この設定ファイルには平文を書かない
+# 運用にしたい場合に使う (その場合 github_token はこちらから来るので上を消す)。
+#
+# - シェルを介さず実行するため、パイプ・リダイレクト・変数展開は使えない
+# - 初回のツール呼び出し時に一度だけ実行し、以降はプロセス内でキャッシュする
+# - 取得した YAML 側の config_override_command は辿らない
+# - Deno にそのバイナリの --allow-run が必要 (launch.sh は既定で op を許可)
+#
+# config_override_command: op read "op://development/gist-mcp-server/config-yaml"

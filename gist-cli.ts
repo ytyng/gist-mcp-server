@@ -60,14 +60,18 @@ EXAMPLES:
 
 Run 'gist-cli <subcommand> --help' for detailed usage of each subcommand.
 
+CONFIGURATION:
+  ~/.config/gist-mcp-server/config.yaml
+                Set 'github_token' here. Optionally set 'config_override_command'
+                to a single command (e.g. 'op read "op://vault/item/config-yaml"')
+                whose stdout is YAML merged over this file. It runs lazily on
+                first use and needs --allow-run for its binary (op by default).
+
 ENVIRONMENT:
-  GITHUB_TOKEN  GitHub Personal Access Token with 'gist' scope.
-                Takes precedence; resolved without spawning a subprocess.
-  GIST_MCP_SERVER_ENV_GETTER_COMMAND
-                Fallback used when GITHUB_TOKEN is unset. A single command
-                (e.g. 'op read "op://vault/item/.env"') whose stdout is parsed
-                as .env text to obtain GITHUB_TOKEN. Run lazily on first use.
-                Requires --allow-run for the command's binary (op by default).`);
+  GITHUB_TOKEN  GitHub Personal Access Token with 'gist' scope. Takes precedence
+                over the config file and skips reading it entirely.
+  GIST_MCP_SERVER_CONFIG_YAML
+                Replaces the whole config file content (for development).`);
 }
 
 function showCreateHelp() {
