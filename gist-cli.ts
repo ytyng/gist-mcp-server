@@ -562,6 +562,11 @@ async function cmdPrune(args: string[]) {
   }
 
   console.log(`\nDone. Deleted ${deleted} Gist(s), ${failed} failed.`);
+  // A failed DELETE is a job failure for callers that run this unattended
+  // (cron with `set -e` cannot see a count printed to stdout).
+  if (failed > 0) {
+    Deno.exit(1);
+  }
 }
 
 async function cmdStar(args: string[]) {
