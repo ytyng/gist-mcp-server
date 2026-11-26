@@ -1,33 +1,33 @@
 # GitHub Gist MCP Server
 
-このサーバーは、GitHub Gist の作成・管理を行うためのツールを提供します。コードスニペットやファイルの共有に便利です。
+This server provides tools for creating and managing GitHub Gists. It is handy for sharing code snippets and files.
 
-## 主要機能
+## Main features
 
-### Gist 管理
-- **Gist 作成**: 単一ファイルまたは複数ファイルの Gist を作成
-- **Gist 取得**: 指定された ID の Gist の詳細情報を表示
-- **Gist 更新**: 既存の Gist の説明やファイルを変更
-- **Gist 削除**: 指定された Gist を完全に削除
-- **Gist 一覧**: ユーザーの Gist 一覧を表示（自分または他のユーザー）
+### Gist management
+- **Create a Gist**: Create a Gist with a single file or multiple files
+- **Get a Gist**: Show the details of the Gist with the given ID
+- **Update a Gist**: Change the description or files of an existing Gist
+- **Delete a Gist**: Permanently delete the given Gist
+- **List Gists**: Show a user's Gists (your own or another user's)
 
-### 公開設定
-- **プライベート Gist**: デフォルトでプライベートとして作成
-- **パブリック Gist**: 明示的に指定することでパブリックとして作成
+### Visibility
+- **Private Gist**: Created as private by default
+- **Public Gist**: Created as public only when explicitly specified
 
-### 画像アップロード
-- Base64 エンコードされた画像を Gist にアップロード
-- プライベート Gist として自動的に作成
+### Image upload
+- Upload Base64-encoded images to a Gist
+- Automatically created as a private Gist
 
-### スター機能
-- Gist にスターを付ける/外す
-- スター状態の確認
+### Stars
+- Star / unstar a Gist
+- Check the star status
 
-## 使用例
+## Examples
 
-### 基本的な Gist 作成
+### Creating a basic Gist
 ```
-簡単な Python スクリプトを Gist に保存してください：
+Please save this simple Python script to a Gist:
 
 def hello_world():
     print("Hello, World!")
@@ -36,28 +36,28 @@ if __name__ == "__main__":
     hello_world()
 ```
 
-### 複数ファイルの Gist 作成
+### Creating a Gist with multiple files
 ```
-プロジェクトの設定ファイルをまとめて Gist にしてください：
+Please put the project's config files together into a Gist:
 - package.json
 - tsconfig.json
 - .gitignore
 ```
 
-### 画像付き Gist
+### Gist with an image
 ```
-この画像をプライベート Gist として保存してください
-[Base64データ]
+Please save this image as a private Gist
+[Base64 data]
 ```
 
-## 必要な環境設定
+## Required environment settings
 
-GitHub の Personal Access Token が必要です。以下の権限を持つトークンを `GITHUB_TOKEN` 環境変数に設定してください：
+A GitHub Personal Access Token is required. Set a token with the following scope in the `GITHUB_TOKEN` environment variable:
 
-- `gist` - Gist の作成・読み書き・削除
+- `gist` - Create, read/write, and delete Gists
 
-## セキュリティ
+## Security
 
-- 全ての Gist はデフォルトでプライベートとして作成されます
-- パブリック Gist の作成は明示的に指定した場合のみ
-- API トークンは環境変数から安全に取得されます
+- All Gists are created as private by default
+- Public Gists are created only when explicitly specified
+- The API token is obtained safely from environment variables
